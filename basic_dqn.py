@@ -11,12 +11,10 @@ from collections import deque
 class DQN:
     def __init__(self):
         self.input_shape = (4, 4, 1)
-        self.batch_input_shape = (-1, 4, 4, 1)
-        #self.input_shape_flattened = self.state_shape[0] * self.state_shape[1]
-        
+        self.batch_input_shape = (-1, 4, 4, 1)        
         self.num_actions = 4
-        self.memory  = deque(maxlen=2000)
         
+        self.memory = list()
         self.gamma = 0.85
         self.epsilon = 1.0
         self.epsilon_min = 0.01
@@ -65,6 +63,7 @@ class DQN:
         for sample in samples:
             state, action, reward, new_state, done = sample
             target = self.target_model.predict(state.reshape(self.batch_input_shape))
+            print(target
             if done:
                 target[0][int(action)] = reward
             else:
@@ -109,14 +108,14 @@ def get_reward(cur_state, action):
                         [0, 0, 0, 0],
                         [0, 0, 1, 1],
                         [0, 0, 1, 1]])
-    # todo - remove reshapes
-    if action == 0 and np.any(tl_mask * cur_state.reshape(4, 4)):
+    #print(action)
+    if action == 0 and np.any(tl_mask * cur_state):
         return 0.8
-    if action == 1 and np.any(tr_mask * cur_state.reshape(4, 4)):
+    if action == 1 and np.any(tr_mask * cur_state):
         return 0.8
-    if action == 2 and np.any(bl_mask * cur_state.reshape(4, 4)):
+    if action == 2 and np.any(bl_mask * cur_state):
         return 0.8
-    if action == 3 and np.any(br_mask * cur_state.reshape(4, 4)):
+    if action == 3 and np.any(br_mask * cur_state):
         return 0.8
     return -.5
 
@@ -169,9 +168,14 @@ def test_model(model):
     
     true_labels = [0, 1, 2, 3]
     correct = 0.0
+    print('testing')
     for state, label in zip(test_states, true_labels):
-        if model.act(state.reshape(1, 16)) == label:
-        #if model.act(state) == label:
+        print(state)
+        print(label)
+        prediction = model.act(state)
+        print(prediction)
+        if prediction == label:
+            print('correct')
             correct = correct + 1.0
     return correct / len(test_states)
 
@@ -179,19 +183,18 @@ def test_model(model):
 if __name__ == "__main__":
     print_examples = False
     gamma   = 0.9
-    epsilon = .98
+    epsilon = .90
 
-    trials  = 20
-    trial_len = 75
+    trials  = 2
+    trial_len = 100
 
     dqn_agent = DQN()
     steps = []
     for trial in range(trials):
         cur_state = get_next_state()
-        #cur_state = cur_state.reshape(1, 16)
         
         for step in range(trial_len):
-            action = dqn_agent.act(cur_state.reshape(1, 16))
+            action = dqn_agent.act(cur_state)
             new_state = get_next_state()
             reward = get_reward(cur_state, action)
             done = step == trial_len - 1
@@ -199,14 +202,13 @@ if __name__ == "__main__":
             if print_examples and step < 5:
                 print('trial', trial, 'step', step)
                 print('current_state')
-                print(cur_state.reshape(4, 4))
+                print(cur_state)
                 print('action')
                 print(action)
                 print('reward')
                 print(reward)
 
-            #new_state = new_state.reshape(1,16)
-            dqn_agent.remember(cur_state.reshape(1, 16), action, reward, new_state.reshape(1, 16), done)
+            dqn_agent.remember(cur_state, action, reward, new_state.reshape(1, 16), done)
             
             dqn_agent.replay()       # internally iterates default (prediction) model
             dqn_agent.target_train() # iterates target model
