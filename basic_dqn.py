@@ -63,7 +63,7 @@ class DQN:
         for sample in samples:
             state, action, reward, new_state, done = sample
             target = self.target_model.predict(state.reshape(self.batch_input_shape))
-            print(target
+
             if done:
                 target[0][int(action)] = reward
             else:
@@ -168,14 +168,14 @@ def test_model(model):
     
     true_labels = [0, 1, 2, 3]
     correct = 0.0
-    print('testing')
+    #print('testing')
     for state, label in zip(test_states, true_labels):
-        print(state)
-        print(label)
+        #print(state)
+        #print(label)
         prediction = model.act(state)
-        print(prediction)
+        #print(prediction)
         if prediction == label:
-            print('correct')
+            #print('correct')
             correct = correct + 1.0
     return correct / len(test_states)
 
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     gamma   = 0.9
     epsilon = .90
 
-    trials  = 2
+    trials  = 20
     trial_len = 100
 
     dqn_agent = DQN()
