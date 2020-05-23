@@ -10,8 +10,9 @@ from collections import deque
 
 class DQN:
     def __init__(self):
-        self.state_shape = (4, 4, 1)
-        self.state_shape_flattened = self.state_shape[0] * self.state_shape[1]
+        self.input_shape = (4, 4, 1)
+        self.batch_input_shape = (-1, 4, 4, 1)
+        #self.input_shape_flattened = self.state_shape[0] * self.state_shape[1]
         
         self.num_actions = 4
         self.memory  = deque(maxlen=2000)
@@ -28,15 +29,11 @@ class DQN:
 
     def create_model(self):
         model = Sequential()
-        #state_shape  = self.env.observation_space.shape 
-        model.add(Conv2D(filters=6, input_shape=(16, 1, 1),
-                         kernel_size=(1,1), strides=(1,1), padding="valid",
-                         activation = "relu"))  # convolutional input
+        model.add(Conv2D(filters=10, input_shape=self.input_shape,
+                         kernel_size=(2, 2), strides=(1,1), padding="valid",
+                         activation = "relu"))
         model.add(Flatten())
-        #model.add(Dense(24, input_dim=self.state_shape_flattened,
-        #                activation="relu"))  #dense input
-        #model.add(Dense(16, activation="relu"))
-        model.add(Dense(4))  # output layer
+        model.add(Dense(self.num_actions))  # output layer
         model.compile(loss="mean_squared_error", optimizer=Adam(lr=self.learning_rate))
         model.summary()
         return model
@@ -50,7 +47,7 @@ class DQN:
             return np.floor(np.random.rand() * self.num_actions)
         #print('action from model')
         #print('state', state.reshape(1, 16, 1, 1))
-        prediction = self.model.predict(state.reshape(1, 16, 1, 1))[0]
+        prediction = self.model.predict(state.reshape(self.batch_input_shape))[0]
         #print('prediction', prediction)
         #print('action', np.argmax(prediction))
         return np.argmax(prediction)
@@ -67,12 +64,11 @@ class DQN:
         samples = random.sample(self.memory, batch_size)
         for sample in samples:
             state, action, reward, new_state, done = sample
-            #target = self.target_model.predict(state.reshape(4, 4, 1, 1))
-            target = self.target_model.predict(state.reshape(1, 16, 1, 1))
+            target = self.target_model.predict(state.reshape(self.batch_input_shape))
             if done:
-                target[0][action] = reward
+                target[0][int(action)] = reward
             else:
-                prediction = self.target_model.predict(state.reshape(1, 16, 1, 1))[0]
+                prediction = self.target_model.predict(state.reshape(self.batch_input_shape))[0]
                 Q_future = max(prediction)
                 #print('prediction', prediction)
                 #print('Q_future', Q_future)
@@ -81,7 +77,7 @@ class DQN:
                 # will need some work here to store and access the 4x1 output vector
                 # possibly store as dictionary instead of deque
                 target[0][int(action)] = reward + Q_future * self.gamma
-            self.model.fit(state.reshape(1, 16, 1, 1), target, epochs=1, verbose=0)
+            self.model.fit(state.reshape(self.batch_input_shape), target, epochs=1, verbose=0)
 
     def target_train(self):
         #print('Training target model...')
@@ -123,7 +119,8 @@ def get_reward(cur_state, action):
     if action == 3 and np.any(br_mask * cur_state.reshape(4, 4)):
         return 0.8
     return -.5
-    
+
+
 def get_next_state():
     possible_states = [
         np.array([[0, 0, 0, 0],
@@ -148,6 +145,7 @@ def get_next_state():
                   [0, 0, 0, 0]])
         ]
     return random.sample(possible_states, 1)[0]
+
 
 def test_model(model):
     test_states = [
@@ -183,8 +181,8 @@ if __name__ == "__main__":
     gamma   = 0.9
     epsilon = .98
 
-    trials  = 10
-    trial_len = 200
+    trials  = 20
+    trial_len = 75
 
     dqn_agent = DQN()
     steps = []
