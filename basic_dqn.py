@@ -11,6 +11,8 @@ from collections import deque
 class DQN:
     def __init__(self):
         self.state_shape = (4, 4, 1)
+        self.state_shape_flattened = self.state_shape[0] * self.state_shape[1]
+        
         self.num_actions = 4
         self.memory  = deque(maxlen=2000)
         
@@ -27,56 +29,62 @@ class DQN:
     def create_model(self):
         model = Sequential()
         #state_shape  = self.env.observation_space.shape 
-        #model.add(Conv2D(filters=6, input_shape=self.state_shape,   
-        #                 kernel_size=(2,2), strides=(1,1), padding="valid",
-        #                 activation = "relu"))  # convolutional input
-        #model.add(Flatten())
-        model.add(Dense(24, input_dim=self.state_shape[0]*self.state_shape[1],
-                        activation="relu"))  #dense input
-        model.add(Dense(16, activation="relu"))
-        model.add(Dense(self.num_actions))
+        model.add(Conv2D(filters=6, input_shape=(16, 1, 1),
+                         kernel_size=(1,1), strides=(1,1), padding="valid",
+                         activation = "relu"))  # convolutional input
+        model.add(Flatten())
+        #model.add(Dense(24, input_dim=self.state_shape_flattened,
+        #                activation="relu"))  #dense input
+        #model.add(Dense(16, activation="relu"))
+        model.add(Dense(4))  # output layer
         model.compile(loss="mean_squared_error", optimizer=Adam(lr=self.learning_rate))
         model.summary()
         return model
 
     def act(self, state):
+        #print('Acting...')
         self.epsilon *= self.epsilon_decay
         self.epsilon = max(self.epsilon_min, self.epsilon)
         if np.random.random() < self.epsilon:
+            #print('random action')
             return np.floor(np.random.rand() * self.num_actions)
-        #return np.argmax(self.model.predict(state.reshape(4, 4, 1, 1))[0])
-        return np.argmax(self.model.predict(state)[0])
+        #print('action from model')
+        #print('state', state.reshape(1, 16, 1, 1))
+        prediction = self.model.predict(state.reshape(1, 16, 1, 1))[0]
+        #print('prediction', prediction)
+        #print('action', np.argmax(prediction))
+        return np.argmax(prediction)
 
     def remember(self, state, action, reward, new_state, done):
         self.memory.append([state, action, reward, new_state, done])
 
     def replay(self):
+        #print('Replaying...')
         batch_size = 32
         if len(self.memory) < batch_size: 
             return
 
         samples = random.sample(self.memory, batch_size)
-        #print('got samples')
         for sample in samples:
             state, action, reward, new_state, done = sample
             #target = self.target_model.predict(state.reshape(4, 4, 1, 1))
-            target = self.target_model.predict(state)
+            target = self.target_model.predict(state.reshape(1, 16, 1, 1))
             if done:
                 target[0][action] = reward
             else:
-                Q_future = max(self.target_model.predict(new_state)[0])
-                #Q_future = max(self.target_model.predict(new_state.reshape(4, 4, 1, 1))[0])
-                #print(target)
-                #print(target[0])
-                #print(action)
-                #print(target[0][int(action)])
+                prediction = self.target_model.predict(state.reshape(1, 16, 1, 1))[0]
+                Q_future = max(prediction)
+                #print('prediction', prediction)
+                #print('Q_future', Q_future)
+                #print('action', action)
 
                 # will need some work here to store and access the 4x1 output vector
                 # possibly store as dictionary instead of deque
                 target[0][int(action)] = reward + Q_future * self.gamma
-            self.model.fit(state, target, epochs=1, verbose=0)
+            self.model.fit(state.reshape(1, 16, 1, 1), target, epochs=1, verbose=0)
 
     def target_train(self):
+        #print('Training target model...')
         weights = self.model.get_weights()
         target_weights = self.target_model.get_weights()
         for i in range(len(target_weights)):
@@ -105,7 +113,7 @@ def get_reward(cur_state, action):
                         [0, 0, 0, 0],
                         [0, 0, 1, 1],
                         [0, 0, 1, 1]])
-    
+    # todo - remove reshapes
     if action == 0 and np.any(tl_mask * cur_state.reshape(4, 4)):
         return 0.8
     if action == 1 and np.any(tr_mask * cur_state.reshape(4, 4)):
@@ -165,6 +173,7 @@ def test_model(model):
     correct = 0.0
     for state, label in zip(test_states, true_labels):
         if model.act(state.reshape(1, 16)) == label:
+        #if model.act(state) == label:
             correct = correct + 1.0
     return correct / len(test_states)
 
@@ -181,13 +190,13 @@ if __name__ == "__main__":
     steps = []
     for trial in range(trials):
         cur_state = get_next_state()
-        cur_state = cur_state.reshape(1, 16)
+        #cur_state = cur_state.reshape(1, 16)
         
         for step in range(trial_len):
-            action = dqn_agent.act(cur_state)
+            action = dqn_agent.act(cur_state.reshape(1, 16))
             new_state = get_next_state()
             reward = get_reward(cur_state, action)
-            done = False
+            done = step == trial_len - 1
 
             if print_examples and step < 5:
                 print('trial', trial, 'step', step)
@@ -198,8 +207,8 @@ if __name__ == "__main__":
                 print('reward')
                 print(reward)
 
-            new_state = new_state.reshape(1,16)
-            dqn_agent.remember(cur_state, action, reward, new_state, done)
+            #new_state = new_state.reshape(1,16)
+            dqn_agent.remember(cur_state.reshape(1, 16), action, reward, new_state.reshape(1, 16), done)
             
             dqn_agent.replay()       # internally iterates default (prediction) model
             dqn_agent.target_train() # iterates target model
